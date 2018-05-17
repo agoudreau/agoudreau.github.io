@@ -105,11 +105,11 @@ Interestingly, the Cadillac Escalade is classified as a number of different type
 
 **For the second approach:**
 ```{r}
-head(levels(dat$make), 50)
-head(levels(dat$model), 50)
+head(levels(dat$make), n=500)
+head(levels(dat$model), n=500)
 ```
 
-Yikes. We can see here that there are all kinds of misspellings (over 45 different ways to spell or abbreviate "Chrysler"), different spellings/spacing ("325I 4DR" vs. "325I  4DR"), and data entry errors ("ACCENT" is a model, but it's also listed under make).
+Yikes. We can see here that there are all kinds of misspellings (so many different ways to spell or abbreviate "Chevrolet") and data entry errors ("ACCENT" is a model, but it's also listed under make).
 
 Rather than trying to reclassify every type of vehicle properly, for this tutorial, we'll only show you how to clean up a few of the car makes, but we encourage the reader to see what else they can fix up! (One thing to note is that in some cases, pre-cleaning of the data might actually be easier. On a smaller dataset in a similar case (one with many, many misspellings), if you were planning to use the make or model of the car for any kind of data analysis, it might be easier to open the CSV file in Excel or a similar program and manually change the spellings using Excel's built-in filters to select the ones that you want to change all at once, rather than using several regular expressions to account for every misspelling.)
 
