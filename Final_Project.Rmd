@@ -105,8 +105,8 @@ Interestingly, the Cadillac Escalade is classified as a number of different type
 
 **For the second approach:**
 ```{r}
-levels(dat$make)
-levels(dat$model)
+head(levels(dat$make), 50)
+head(levels(dat$model), 50)
 ```
 
 Yikes. We can see here that there are all kinds of misspellings (over 45 different ways to spell or abbreviate "Chrysler"), different spellings/spacing ("325I 4DR" vs. "325I  4DR"), and data entry errors ("ACCENT" is a model, but it's also listed under make).
