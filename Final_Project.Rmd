@@ -1,0 +1,494 @@
+---
+title: "Final Project"
+author: "Amy Goudreau"
+date: "May 13, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+Traffic is a common nuisance for all of us, especially those of us who spend much time driving around the DC area. How often do we see drivers who we really wish would get pulled over (and yet, they don't)! And many of us have heard that red cars get caught speeding more often than any other color car. But are certain people really more likely to get a traffic violation than others? This is the question we aim to answer in this tutorial.
+
+The data can be downloaded from [Kaggle](https://www.kaggle.com/rounak041993/traffic-violations-in-maryland-county) and contains information about traffic violations issued in Montgomery County, MD between 01/01/2012 and 04/25/2018. If you want more current data, the [dataset from which the Kaggle set was drawn](https://catalog.data.gov/dataset/traffic-violations-56dda) is updated daily.
+
+# Getting Started
+
+For this tutorial, you can use your preferred R environment. We suggest you use [RStudio](https://www.rstudio.com/)--you can easily use RMarkdown, install packages, and much more. You'll also need the following libraries: [tidyverse](https://www.tidyverse.org/), [broom](https://cran.r-project.org/web/packages/broom/vignettes/broom.html) and [Leaflet](https://rstudio.github.io/leaflet/).
+
+# Getting & Cleaning Up the Data
+
+Let's start out by loading the tidyverse library, which will be useful for cleaning up and manipulating our data. Then, we can read the data file and saving it to a data frame called "dat." A data frame is basically R's way of storing a data table. For more information about data frames, see: http://www.r-tutor.com/r-introduction/data-frame. 
+
+We can then view the first few rows of the data frame to get an overall look at it. If you prefer to see the whole thing, you can just use the name of the data frame without the head() function. However, since our dataset has over 1 million rows, we'll just look at the first few.
+
+Note that we will frequently only view the beginning of the output in this tutorial, for the sake of length. However, if you would like to view the entire output, you can remove the head() function from around the name of the data frame, or you can use the View() function.
+
+```{r}
+library(tidyverse) #load tidyverse
+
+dat <- read.csv("~/Traffic_Violations.csv", header = TRUE) #read data as csv
+head(dat) #view the data frame
+```
+
+Okay, we can now see a little bit more about what each data point looks like. The good news is that our data seems to already be in a "tidy" format, basically meaning that each row represents a single point of data and each column represents a single variable. (For more about tidy data, see [Hadley Wickham's paper](http://vita.had.co.nz/papers/tidy-data.pdf) about tidy data.) Here, each row represents a traffic stop, and contains a wealth of data in the columns about that stop--date, time, reason for the stop, make and model of the car, gender and race of the driver, and more.
+
+Another good thing to know is how much data we have: the number of rows and the number of columns.
+
+```{r}
+dim(dat) #outputs the number of rows, followed by the number of columns
+```
+
+Looks like we have around 1.3 million rows and 35 columns in our dataset. That seems like plenty of data to work with!
+
+We also need to know the type of data in each column. R has several built-in [data types](https://swcarpentry.github.io/r-novice-inflammation/13-supp-data-structures/), and when R reads in a dataset, it tries to figure out what type of data each column in the original file has. Sometimes it does a good job; other times, it doesn't. Let's see what happened this time:
+
+```{r}
+str(dat)
+```
+
+There's a lot going on here, but let's break it down. On the far left, R is simply listing the name of each column. After that, it tells us the type of the data column. Let's take Property.Damage, about a third of the way down on the output, as an example. 
+
+R tells us that Property.Damage is a [factor](https://www.r-bloggers.com/data-types-part-3-factors/) with 2 levels, and the 2 levels are "No" and "Yes." This means that R has decided that based on the data in the column, this column contains categorical data, and the 2 categories are No and Yes. In this case, this is true! 
+
+After the categories in the output, there are a bunch of numbers. For the data type factor, R assigns numbers to each category behind the scenes. Here, R is simply listing out the first few data points in the data frame, using those assigned numbers. Remember above when we looked at the first few rows of the data frame? The first 6 values in the Property.Damage column were No, No, Yes, Yes, No, No. In our output from str(), we see the first 6 numbers for Property.Damage are 1, 1, 2, 2, 1, 1. These numbers are mapped to the No/Yes values.
+
+Going back to the entire str() output, there are a few problems. R has decided that nearly all of our data columns are factors. In fact, many of them are. But we probably want R to treat our Date.Of.Stop and Time.Of.Stop columns as dates and times, respectively, not categories. We'll take care of that soon. First, however, let's rename our variables. This step isn't always strictly necessary, but it's up to your personal preference. In this case, our personal preference dictates that some of the names are just too long, and lowercase letters are easier to type. We can rename variables by creating a vector with all the new names and assigning it to the "names" variable that R builds into each data frame.
+
+```{r}
+names(dat) <- c("date_of_stop", "time_of_stop", "agency", "subagency", "description", "location", "lat", "long", "accident", "belts", "personal_injury", "property_damage", "fatal", "comm_license", "hazmat", "comm_veh", "alcohol", "work_zone", "state", "veh_type", "year", "make", "model", "color", "violation_type", "charge", "article", "contrib_to_acc", "race", "gender", "driver_city", "driver_state", "dl_state", "arrest_type", "geolocation")
+head(dat)
+```
+
+Here's another optional step, but one that can make the data easier to think about. We're going to reorder the columns of the data frame. Notice that some columns that logically should be grouped together (like description of the stop and the violation type, or latitude/longitude and geolocation) are quite far apart in the original data frame. We'll use the select() function from dplyr (part of tidyverse) to select the columns we want from the dataframe. In this case, we want all the columns, but the order in which we place the columns in the select() function is the order in which they will be displayed. Just make sure you assign the selection back to the dat dataframe to actually alter it!
+
+```{r}
+dat <- select(dat, "date_of_stop", "time_of_stop", "agency", "subagency", "description", "violation_type", "charge", "article", "arrest_type", "location", "lat", "long", "geolocation", "accident", "contrib_to_acc", "belts", "personal_injury", "property_damage", "fatal", "alcohol", "work_zone", "hazmat", "state", "veh_type", "year", "make", "model", "color", "comm_veh", "race", "gender", "driver_city", "driver_state", "dl_state", "comm_license")
+
+head(dat)
+```
+
+Now that our data is organized a bit more logically, we need to tackle the problem of the dates and times. readr (part of tidyverse) has a helpful function called type_convert that we can use. However, type_convert can't convert factors into other data types. So we first have to convert the factors into the type character. Again, make sure you assign the newly converted character column back to the correct column in dat to permanently alter it. You can access the name of a column using the $ accessor.
+
+```{r}
+dat$date_of_stop <- as.character(dat$date_of_stop) #date_of_stop to type character
+dat$time_of_stop <- as.character(dat$time_of_stop) #time_of_stop to type character
+```
+
+Next, use the type_convert function, in conjunction with cols(), to change the type of the date and time columns. cols() basically lets you indicate what the type of various columns should be. For dates and times, you do have to indicate the format that the date and time are in so that R can parse it correctly. Here, our date is in format mm/dd/yyyy, so we use a sort of regular expression to indicate this format. More information about the formatting can be found in the documentation for [parse_datetime](https://www.rdocumentation.org/packages/readr/versions/1.1.1/topics/parse_datetime).
+
+```{r}
+dat <- type_convert(dat, cols(date_of_stop = col_date(format = "%m/%d/%Y"), time_of_stop = col_time(format = "%H:%M:%S")))
+head(dat)
+```
+
+Now, is there anything else we need to clean up in the data? There are a few ways to explore this. If you're using RStudio, one way to just take a quick visual look at the data is to take a sample of the data and just look through it, to see if anything catches your eye. Another way is to look at the levels, or categories, of factors and see if anything looks strange. Personally, I think doing both is a good idea.
+
+**For the first approach:**
+```{r}
+smpl <- sample_frac(dat, .01) #take a sample of 1% from dat
+head(smpl) #to view it like a spreadsheet, use View(smpl)
+```
+This will take a different sample each time it is run. An example of things you might want to look for: Perhaps the sample will show that a Cadillac Escalade was classified as a Heavy Duty Truck. This sounds a little bit odd, so we can look at the classification of all Cadillac Escalades. 
+
+We're going to use the [pipe operator from magrittr](https://magrittr.tidyverse.org/), which essentially takes the result of whatever is on the left-hand side of the operator and feeds it in as the first argument of whatever is on the right-hand side of the operator. select() chooses the columns we want, and filter() chooses the rows we want based on some conditions.
+```{r}
+escalade <- dat %>% 
+  select(veh_type, make, model) %>% 
+  filter(model == "ESCALADE")
+head(escalade)
+```
+
+Interestingly, the Cadillac Escalade is classified as a number of different types of vehicles--everything from light duty truck to heavy duty truck to automobile to station wagon! This is probably due to the subjectivity of the officer who entered the traffic violation. This could cause some problems for us later if we want to use make or model in our analysis...
+
+**For the second approach:**
+```{r}
+levels(dat$make)
+levels(dat$model)
+```
+
+Yikes. We can see here that there are all kinds of misspellings (over 45 different ways to spell or abbreviate "Chrysler"), different spellings/spacing ("325I 4DR" vs. "325I  4DR"), and data entry errors ("ACCENT" is a model, but it's also listed under make).
+
+Rather than trying to reclassify every type of vehicle properly, for this tutorial, we'll only show you how to clean up a few of the car makes, but we encourage the reader to see what else they can fix up! (One thing to note is that in some cases, pre-cleaning of the data might actually be easier. On a smaller dataset in a similar case (one with many, many misspellings), if you were planning to use the make or model of the car for any kind of data analysis, it might be easier to open the CSV file in Excel or a similar program and manually change the spellings using Excel's built-in filters to select the ones that you want to change all at once, rather than using several regular expressions to account for every misspelling.)
+
+We're going to need some heavy use of regular expressions to deal with this data, and in order to do so, we need to actually convert the factor to a character so we can treat it as text. R will do this implicitly for you when you use the str_replace function we will be using below, but if you want to do it explicitly for any reason, you can.
+```{r}
+#save the levels so we can still look at them after converting make to text. You can look at them using View()
+makes <- levels(dat$make) 
+
+#explicitly convert make to character type
+dat$make <- as.character(dat$make) 
+```
+
+Let's start using [regular expressions](https://www.rdocumentation.org/packages/base/versions/3.5.0/topics/regex) to clean things up! This is where saving the levels comes into play. You can look back at them to decide what to use for your regular expressions to make sure you catch as many things as possible with a single regex, but without catching things you don't want. There are a number of ways to replace strings in R, but I like using [str_replace](https://www.rdocumentation.org/packages/stringr/versions/1.3.0/topics/str_replace).
+
+Regular expressions themselves are outside the scope of this tutorial, but if you've never been exposed to them before, see [this cheatsheet](https://medium.com/factory-mind/regex-tutorial-a-simple-cheatsheet-by-examples-649dc1c3f285) or [this tutorial](https://regexone.com/). Note that regular expressions can be slightly different from language to language, but the concepts are the same.
+```{r}
+dat$make <- str_replace(dat$make, "^0LDS.*", "OLDSMOBILE")
+```
+
+Here we replaced the data that said "0LDS" or "0LDSMOBILE" with "OLDSMOBILE." We'll do a few more similarly.
+
+```{r}
+dat$make <- str_replace(dat$make, ".*RUNNER.*", "TOYOTA") #4RUNNER
+dat$make <- str_replace(dat$make, ".*TOYOTA.*", "TOYOTA") #has TOYOTA in it
+dat$make <- str_replace(dat$make, "^AC..?RA$", "ACURA")
+dat$make <- str_replace(dat$make, "^ACURA.*", "ACURA")
+dat$make <- str_replace(dat$make, "^ACUR.*", "ACURA")
+dat$make <- str_replace(dat$make, "^AC..A$", "ACURA")
+dat$make <- str_replace(dat$make, "^ACU.?$", "ACURA")
+dat$make <- str_replace(dat$make, "^ACR.$", "ACURA")
+dat$make <- str_replace(dat$make, "^ACCU.?$", "ACURA")
+dat$make <- str_replace(dat$make, "^ACUAR$", "ACURA")
+```
+
+Now let's change the column back to a factor and see the results:
+```{r}
+dat$make <- as.factor(dat$make)
+levels(dat$make)
+```
+
+We can see that the rest of the ACURA misspellings have disappeared because they've been converted to ACURA!
+
+Now, for this tutorial, we won't be using the car's make or model for analysis, so we aren't going to worry too much about getting them totally clean. However, we do want to use a number of the other columns, so let's clean those up! Primarily, we want to make sure that the levels for any categorical variables or the values for any numeric variables make sense and that any missing values are coded as NA.
+
+The summary() can give us a quick look at numeric data and help us determine whether we might need to take a closer look. It'll give us basic summary statistics about the data, so we can see if there might be a mistyped year that's too far in the past to be reasonable, for example.
+
+```{r}
+summary(dat$date_of_stop)
+```
+It doesn't look like there are any crazy dates mixed in, with dates either too far in the past or in the future, because both the minimum and maximum seem reasonable.
+
+```{r}
+summary(dat$year)
+```
+This isn't so good. We have both year 0 and year 9999 in our data, but we know that it's impossible to have a car made in either of those years! The [Model T](https://en.wikipedia.org/wiki/Ford_Model_T) was first produced in 1908, so it's probably safe to say that any year prior to 1908 or after 2018 can be coded as NA. Additionally, by looking at the data manually using `dat %>% filter(year < 1960)` we can see a 1932 Honda Civic (the Civic was not manufactured in 1932) and a pedestrian entry, so we'll code the year as NA for those as well.
+
+Here, we assign the NA character to year based on the condition inside the square brackets. Whenever the condition is true, the NA character is assigned to year in place of whatever was there previously. R will recognize that we are treating year as a character column, so we don't have to explicitly change it. However, we will need to change it back to an integer column at the end.
+
+```{r}
+dat$year[dat$year < 1908 | dat$year > 2018] <- NA_character_
+dat$year[dat$make == "PEDESTRIAN"] <- NA_character_
+dat$year[dat$year == 1932 & dat$make == "Honda" & dat$model == "Civic"] <- NA_character_
+dat$year <- as.integer(dat$year)
+summary(dat$year)
+```
+These numbers make a lot more sense!
+
+Let's check our factor columns as well. The summary function will list each level of the factor and the count of how many values the column contains for each factor. Since there are so many variables in this dataset, we'll only show the ones we're going to use later on, but it's good practice to take a look at all the data, especially data you might want to use for analysis.
+```{r}
+print("Agency")
+summary(dat$agency)
+print("Subagency")
+summary(dat$subagency)
+print("Violation Type")
+summary(dat$violation_type)
+print("Charge")
+summary(dat$charge)
+print("Arrest Type")
+summary(dat$arrest_type)
+print("Accident")
+summary(dat$accident)
+print("Contributed to Accident")
+summary(dat$contrib_to_acc)
+print("Belts")
+summary(dat$belts)
+print("Personal Injury")
+summary(dat$personal_injury)
+print("Property Damage")
+summary(dat$property_damage)
+print("Fatal")
+summary(dat$fatal)
+print("Alcohol")
+summary(dat$alcohol)
+print("Work Zone")
+summary(dat$work_zone)
+print("HAZMAT")
+summary(dat$hazmat)
+print("Driver Race")
+summary(dat$race)
+print("Driver Gender")
+summary(dat$gender)
+print("Driver's License State")
+summary(dat$dl_state)
+print("Geolocation")
+summary(dat$geolocation)
+print("Color")
+summary(dat$color)
+
+```
+We can see that agency and accident only have one factor level, so we can leave them out of our analysis later. We only have a few things we need to recode here. 
+
+First, in our color column, we have some blank values ("") and some N/A values. We'll want to replace those with R's recognized NA character. This is pretty easy, using the str_replace function from before:
+```{r}
+dat$color <- str_replace(dat$color, "^$", NA_character_)
+dat$color <- str_replace(dat$color, "N/A", NA_character_)
+
+dat$color <- as.factor(dat$color)
+levels(dat$color)
+```
+We can see that we now have fewer levels for color.
+
+Subagency and geolocation also have some blanks that we'll code as NA and we'll recode state XX for driver's license state as NA. We'll also code state US as NA, since we don't have a state and it's not an international abbreviation, and we'll combine PQ and QC since PQ is the French abbreviation for Quebec (QC).
+
+```{r}
+#R will implicitly convert these to character
+dat$subagency <- str_replace(dat$subagency, "^$", NA_character_)
+dat$geolocation <- str_replace(dat$geolocation, "^$", NA_character_)
+dat$dl_state <- str_replace(dat$dl_state, "XX", NA_character_)
+dat$dl_state <- str_replace(dat$dl_state, "US", NA_character_)
+dat$dl_state <- str_replace(dat$dl_state, "PQ", "QC")
+
+#we'll leave geolocation as character but convert the others back
+dat$subagency <- as.factor(dat$subagency)
+dat$dl_state <- as.factor(dat$state)
+```
+
+*Phew.* Okay, deep breath. Our data is clean! 
+
+One last thing we might want to do with this data is have a separate dataset where we remove duplicates. Each traffic violation is entered separately, but a single traffic stop could have several different charges. If we remove variables like description and violation type that could differentiate charges for a single stop, we can remove duplicate traffic stops. This would be useful for exploring things like the distribution of years of vehicles without the data being influenced by repeated observations. However, we may still want to have the original dataset for exploring things like types of violations.
+
+We'll use the distinct() function, which removes duplicate rows, to do this.
+
+```{r}
+dat_nodup <- select(dat, -c(description, violation_type, charge, article)) %>% distinct()
+```
+
+# Exploratory Data Analysis
+
+The next step is to do some exploratory data analysis, or EDA. The purpose of EDA is to get a good look at the data using statistics and visualizations, so we have a better idea of where we might want to go from there as far as analysis. 
+
+An excellent tool that we can use for data visualization and graphs is [ggplot2](http://ggplot2.tidyverse.org/), which is part of tidyverse. ggplot allows us to think about graphing our data in 3 pieces:
+1. The data: What data are we plotting?  
+2. The mapping: How does that data map to various attributes (such as the axes)?  
+3. The geometric representation: How do we want to visually represent data points?  
+
+This is called the grammar of graphics.
+
+Let's start with a simple example. Say we want to see the distribution of the vehicle colors. We can create a bar chart with ggplot2. (See this cool [cheatsheet](https://www.rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf) for help deciding what kind of graph you might want to use for your data!)
+
+A ggplot is built in layers. Each layer is added using a "+" sign. Here, we'll use dat as our data, map x to the variable "color" inside the aes() function, and add a layer that tells ggplot to make a bar graph.
+
+```{r}
+color_bar <- ggplot(data = dat_nodup, aes(x=color)) + geom_bar()
+color_bar
+```
+Not bad! Unfortunately, the labels on the x-axis are hard to read, and the graph is just kind of ugly in general. Fortunately, there are ways to fix this.
+
+We'll [rotate the axis labels](http://www.sthda.com/english/wiki/ggplot2-axis-ticks-a-guide-to-customize-tick-marks-and-labels#change-the-appearance-of-the-axis-tick-mark-labels), add a title, and [change the color of the bars](http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/).
+
+```{r}
+color_bar <- ggplot(data = dat_nodup, aes(x=color)) + geom_bar(fill="lightblue", color="darkblue") + theme(axis.text.x = element_text(angle=90)) + ggtitle("Vehicle Colors")
+color_bar
+```
+That looks a little nicer! There are all kinds of things that can be done with ggplot, and I encourage you to experiment with it. 
+
+The graph is also useful to look at--it tells us that the most common colors for cars in this dataset are black, silver, white, and gray. Maybe later we could look at what types of violations are most common for each car color.
+
+We can also use our numeric variables in conjunction with our categorical variables. For example, perhaps we want to see what the distribution of vehicle years is based on the vehicle color.
+
+```{r}
+color_year <- ggplot(data = dat_nodup, aes(x=color, y=year)) + geom_boxplot() + theme(axis.text.x = element_text(angle=90))
+color_year
+```
+This displays a boxplot showing the distribution of years, broken down by each color of car. Boxplots show us where the median, first quartile, and third quartile are, and we can also see outliers represented as dots. We can tell, for example, that gray cars in this dataset are, on average, a little bit newer than gold cars, but that there's also a much bigger spread of years for gray cars than gold cars.
+
+We can change the type of plot we use by simply changing the geometric representation:
+```{r}
+color_year <- ggplot(data = dat_nodup, aes(x=color, y=year)) + geom_violin() + theme(axis.text.x = element_text(angle=90))
+color_year
+```
+We can also create plots using one or more numeric variables. The geometric representation in this case will be a point, but you can also use other representations, such as text. (We're going to just plot a sample of our data here, since there is so much of it!)
+```{r}
+dat2 <- sample_n(dat_nodup, 500)
+date_time <- ggplot(data = dat2, aes(x=date_of_stop, y=year)) + geom_point()
+date_time
+```
+
+You can map variables to attributes other than the x and y axis as well. For example, color or size--we'll use color here.
+```{r}
+date_time <- ggplot(data = dat2, aes(x=date_of_stop, y=year, color=property_damage)) + geom_point()
+date_time
+```
+This graph is the same as the previous graph, but the points for traffic violations that involved property damage are in blue, while the points for those that didn't involve property damage are in red.
+
+We don't have a lot of numeric data to work with, but we can still explore some statistics about the data we do have. Let's look at year. 
+
+```{r}
+year_hist <- ggplot(data = dat_nodup, aes(x=year)) + geom_histogram()
+year_hist
+```
+We can see visually from this histogram that the data for year appears to be pretty skewed. There are a lot more vehicles from recent years than there are from years prior to 2000 or so. The peak of the distribution, or the mean (average) is somewhere in the mid-2000s. We can also have R give us summary statistics, as we saw earlier:
+
+```{r}
+summary(dat_nodup$year)
+```
+This summary tells us that the mean, as suspected, is 2006. The median is also 2006. The mean can be affected by really big or really small values, while the median, as the "middle" observation, is not. Since they are both the same, this means that the data is actually not that skewed--there are a few outliers, which we know since the graph goes back to the early 1900s, but there are so few that they are not having a large effect on the mean. We can also note that the distance between the 1st quartile and the median (that is, the 25th percentile and the 50th percentile) and the distance between the median and the 3rd quartile (that is, the 50th percentile and the 75th percentile) is pretty similar. This tells us that the distribution on both sides of the median is pretty even.
+
+What if we want to actually identify which observations are outliers? We can do this! Outliers can be considered either observations which are more than *k* standard deviations from the mean *or* observations which are outside *k* times the IQR, or interquartile range (the range containing the middle 50% of the data). We'll use the standard deviation here to identify observations that lie more than 2 standard deviations from the mean.
+
+```{r}
+std_dev_year <- sd(dat_nodup$year, na.rm = TRUE) #calculate standard deviation of year
+dat_nodup$year_z_score <- (dat_nodup$year - 2006)/std_dev_year #standardize year
+year_outliers <- filter(dat_nodup, year_z_score > 2 | year_z_score < (-2)) #filter observations with large standard deviation
+head(year_outliers)
+```
+One more thing to note: we do have some missing data. However, there's really no good way to impute the data in this case. We can't know, for example, the state of a driver's license, and simply using the average year to replace the missing values for the car's year doesn't really make much sense in this case. We simply have to accept that we have some missing values. On the bright side, we have so much data that for the most part, a few missing values won't make much of a difference to our analysis.
+
+Okay. Now that we have a sense of how we can explore data, let's ask a few specific questions about our data that might help us decide what we want to analyze later.
+
+Do certain dates or times of day have more traffic violations?
+```{r}
+dates <- ggplot(data = dat_nodup, aes(x = date_of_stop)) + geom_histogram()
+dates
+```
+Interestingly, there seems to have been a peak in number of traffic stops around the year 2015.
+
+```{r}
+times <- ggplot(data = dat_nodup, aes(x = time_of_stop)) + geom_histogram()
+times
+```
+
+There is a definite pattern in the time of day when traffic stops take place. They seem to peak around 9 a.m. (rush hour) and a bit before midnight and be lowest around 5 a.m. (presumably when most people are still asleep), with a couple smaller peaks and dips throughout the day.
+
+What's the distribution of gender and race?
+```{r}
+summary(dat_nodup$gender)
+ggplot(data=dat_nodup, aes(x=gender)) + geom_bar()
+summary(dat_nodup$race)
+ggplot(data=dat_nodup, aes(x=race)) + geom_bar()
+```
+
+What's the distribution for violation types?
+```{r}
+summary(dat$violation_type)
+ggplot(data=dat, aes(x=violation_type)) + geom_bar()
+```
+
+Now that we have a better idea of the data we're working with, the next step is to see if we can use the data for predictions.
+
+# Statistical & Machine Learning
+
+Now we get to the fun part--actually getting to learn something interesting from our data! The question we are going to attempt to answer is: Can we predict whether someone will receive an actual citation or not based on superficial characteristics like race and gender? In light of recent years' news about police behavior and discrimination, it will be interesting to see if race and gender are enough to predict citations.
+
+The first step is getting our data into the form we want. Since we're just interested in 2 outcomes--received a citation or did not receive a citation--let's code citations as TRUE and non-citations (Warning, ESERO, SERO) as FALSE. We're using our full dataset (the one with "duplicates") because we are interested in the violation type. A single stop could have multiple violations, and we want to consider all of them.
+
+```{r}
+dat$citation <- dat$violation_type == "Citation"
+head(dat)
+```
+Next, we need to divide our data into a training set and a testing set. We want to train the model on the training set, and then test how good it is on the testing data. Here, we'll just split our data in half using a random sample.
+
+```{r}
+set.seed(5678)
+#take a sample of nrow(dat)/2 rows from dat by selecting half the index numbers
+train_indices <- sample(nrow(dat), nrow(dat)/2)
+#assign the rows with the sampled indices to the training set
+train_set <- dat[train_indices,]
+#assign the remainder of the rows to the test set
+test_set <- dat[-train_indices,]
+```
+
+Since this is a classification problem, meaning that we are predicting one of two categories (rather than a numeric value), we will use [logistic regression](http://www.saedsayad.com/logistic_regression.htm) instead of linear regression. Our equation will end up being:
+$$log \frac{p(x)}{1-p(x)} = B_0 + B_{race1} + B_{race2} +B_{race3} +B_{race4} +B_{race5} +B_{gender1}+B_{gender2}$$  
+where $$p(x)$$ is the probability that someone receives a citation given their particular race and gender. We can notate this as $$p(x) = p($$citation | $$race, gender)$$.
+
+Here, we are building a linear model, but using log-odds. This response will be the *odds ratio*, and this odds ratio, along with some simple calculations, will give us the probability of a particular person getting a citation.
+
+Why do we have 5 race variables and 2 gender variables? Well, since race and gender are categorical variables, they do not have numeric values. However, we still want to use them in our analysis, so we treat them as what's called "dummy variables." The way these dummy variables work, is that we create a variable for each *level* of a factor. For gender, for example, we have three levels (or categories): male, female, and unknown. For each level, we create a variable that indicates whether this is the case for the observation. For example, a traffic violation with a female driver would have a value of 0 for gender_male, 1 for gender_female, and 0 for gender_unknown. A male driver would have a value of 1 for gender_male, 0 for gender_female, and 0 for gender_unknown. 
+
+Okay. But then why do we only have 2 gender variables in the model? There are two reasons:  
+1. If we had all three in the model, the three variables would be so highly correlated with each other that R would refuse to fit the model! We wouldn't be able to get any meaningful information from them.  
+2. We need a variable to serve as a *baseline*. This means that the variable that is left out is the one that the coefficients are compared to. For example: Let's say the coefficient for gender_male is 3.0, and we have gender_female as the baseline. For a driver with gender male, the values for the gender dummy variables are gender_male = 1, gender_female = 0, and gender_unknown = 0. When these values are plugged into the model, the coefficient for gender_unknown is multiplied by 0, so it disappears. gender_female isn't in the model, and the coefficient for gender_male, 3.0, is multiplied by the value for gender_male, 1. This means that the response, or the log-odds, increases by 3.0 when the gender of the driver is male. Because of the log, this means that the odds themselves increase by $$e^{3.0}$$. 
+
+In R, we can build a logistic regression model using the glm() function. GLM stands for generalized linear model. 
+
+We'll need the [broom](https://cran.r-project.org/web/packages/broom/vignettes/broom.html) library, which cleans up the output of some statistical functions to make it nicer to use.
+
+The glm() function's first argument is the data you want to base the model on, using the general format of response ~ predictor1 + predictor2 + ...
+
+```{r}
+library(broom)
+
+log_fit <- glm(citation ~ race + gender, data=train_set, family=binomial)
+log_fit %>% 
+  tidy() %>% 
+  knitr::kable(digits=4)
+```
+
+Our final equation:
+$$log \frac{p(citation)}{1-p(citation)} = -0.6094 + 0.3620BLACK + 0.5386HISPANIC + 0.0993NATIVEAMERICAN + 0.0788OTHERRACE + 0.1993WHITE + 0.2720MALE - 1.2312UNKNOWNGENDER$$
+
+Our baseline, then, is Asian for race and female for gender. 
+
+Okay, but how do we know if the estimates are even valid? We can tell by using [hypothesis testing](https://courses.washington.edu/b515/l13.pdf). Basically, this means we are testing how likely it is that the estimate we got is due only to chance. We'll go through the test for one of our coefficients:
+
+First, we state our null hypothesis. This means the thing that we default to without doing this test. In this case, without doing a hypothesis test, we don't have enough evidence to say that the coefficient for BLACK (meaning, the effect that being black has on the log-odds) is anything other than 0--in other words, being black makes no difference.  
+$$H_0$$: $$B_{BLACK} = 0$$  
+Next, we state our alternative hypothesis. This means the thing that we are trying to prove. Here, we are trying to show that being black *does* have an effect on the odds of getting a citation.
+$$H_a: B_{BLACK} \neq 0$$  
+Next, we need a decision rule to decide when we will reject or not reject our null hypothesis. For logistic regression, we use a [Z-statistic](http://www.statisticshowto.com/z-test/) (which standardizes the data using the mean and standard deviation) and the p-value associated with that statistic in the standard normal distribution. A small p-value is good! The cutoff for when to reject the null hypothesis is fairly arbitrary, but 0.05 tends to be commonly used.  
+Decision rule: We will reject the null hypothesis if the p-value from our Z-statistic is < 0.05, and will fail to reject the null hypothesis otherwise.  
+The R output gives us the Z-statistic--here, it is 31.6829--and our p-value is 0. This is less than our chosen significance level of 0.05, so we reject the null hypothesis and conclude that BLACK is a significant predictor of the log-odds for citations. 
+
+Looking at the output, the only predictor that is not significant at alpha = 0.05 is NATIVEAMERICAN, but since it's not much bigger than that and because the other race categorical variables are significant, we'll leave it in the model. (Otherwise, we could remove it, in which case it would become part of the baseline and the effects of the other race coefficients would be compared to the effects of being in the group composed of Asians and Native Americans).
+
+All right! Our model looks good, it checks out statistically--now let's see how it performs! We'll use the model to make predictions on the testing set, and then calculate how many errors the model makes.
+
+We'll use the predict.glm() function to make predictions. Because we set the type of prediction to "response," the predictions will be in the form of probabilities. For logistic regression, we will use 0.5 as our cutoff, meaning that any observation with predicted probability greater than or equal to 0.5 (50%) will be classified as TRUE (meaning, got a citation) and any observation with predicted probability less than 0.5 will be classified as FALSE (meaning, did not get a citation). We'll make a table showing the true value of the data in our test set (the observed side of the table) and what our model predicted for that data (the predicted side of the table).
+
+```{r}
+dat_prediction <- predict(object = log_fit, newdata=test_set, type="response")
+print(table(predicted=dat_prediction > 0.5, observed=test_set$citation))
+```
+
+Now we can calculate how well our model did. We'll calculate the error rate, or the rate of observations our model predicted incorrectly, by dividing the number of wrong predictions by the number of total predictions.
+
+```{r}
+incorrect_pred <- 177327 + 112762
+total_pred <- 229578 + 177327 + 112762 + 126533
+error_rate <- incorrect_pred/total_pred * 100
+error_rate
+```
+
+Wow. Our model was wrong almost 45% of the time! It seems like our model isn't very good at predicting citations--it's only 55% accurate.
+
+So what conclusion can we draw from this? It seems that we actually can't predict whether someone in Montgomery County will receive a citation based on just their race and gender, at least not with any good measure of accuracy. This is good news! It means that police officers in Montgomery County aren't obviously biased based on these characteristics. However, there are a lot of other factors that we don't have data on in this dataset--are proportionally more people of a certain race pulled over than their representation in the population would suggest? Do males and females drive differently? Gathering more data and combining it with the data in this dataset could be an interesting exercise!
+
+As a last fun note, let's do a little data visualization! Since we have geolocation data for much of the dataset, let's create a map so we can see visually how certain characteristics are distributed physically. For this tutorial, we'll create a map plotting the gender of the drivers in traffic violations.
+
+We're going to use the [Leaflet](https://rstudio.github.io/leaflet/) library for this. Leaflet is designed for interactive maps.
+
+We'll go over in more detail what each part of this code chunk does after it runs.
+
+```{r}
+library(leaflet)
+```
+
+First, we sample the data, since we have so much.
+```{r}
+dat_sample <- sample_frac(dat, 0.01)
+```
+Next, we create a function called gender_palette that maps colors to the gender values.
+```{r}
+gender_palette <- colorFactor(c("purple", "red", "green"), domain = c("M","F","U"))
+```
+Then, we create our map. We add a tile layer to it, then we set the default view using latitude and longitude coordinates. We add circle markers to mark each point based ont he latitude and longitude. We can set different aesthetic parameters using radius, stroke, fillOpacity, and fillColor (there are other attributes possible, too!). fillColor is assigned our previously created color-mapping function. We add pop-up labels with the description of the charge with the label attribute. Finally, we create a legend for the map.
+```{r}
+mc_map <- leaflet(dat_sample) %>%
+  addTiles() %>%
+  setView(lat=39.15, lng=-77.24, zoom=10) %>%
+  addCircleMarkers(lng = dat_sample$long, lat = dat_sample$lat,
+    radius = 3,
+    stroke = FALSE,
+    fillOpacity = 1,
+    fillColor = ~gender_palette(gender),
+    label=dat_sample$description) %>%
+  addLegend(position="bottomright", colors=c("purple","red","green"), labels=c("Male","Female","Unknown"))
+mc_map
+```
+
+And there you have it! You have just gone through the data science process, from cleaning up your data, to exploring it, to learning with it, to visualizing it. I encourage you to continue to explore and have fun!
+
